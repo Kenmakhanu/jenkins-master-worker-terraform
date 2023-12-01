@@ -1,0 +1,66 @@
+---
+- hosts: "{{ passed_in_hosts }}"
+  become: yes
+  remote_user: ec2-user
+  become_user: root
+  tasks:
+    - name: install dependencies
+      yum:
+        name: "{{ package }} "
+        state: present
+      vars:
+        package:
+        - wget
+        - git
+
+    - name: clone repo
+      git:
+        repo: https://github.com/ACloudGuru-Resources/content-terraform-jenkins-updated.git
+        dest: /tmp/jenkins
+
+    - name: Setup Jenkins Repo
+      get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+
+    - name: Import Jenkins Repo GPG key
+      rpm_key:
+        state: present
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+
+    - name: install java-openjdk11
+      shell: "amazon-linux-extras install java-openjdk11 -y"
+
+    - name: install Jenkins
+      yum:
+        name: jenkins
+        state: present
+
+    - name: Temporarily Stop Jenkins
+      service:
+        name: jenkins
+        state: stopped
+
+    - name: Delete Jenkins default dir
+      file:
+        state: absent
+        path: /var/lib/jenkins
+
+    - name: Copy over cloned Jenkins /var/lib/jenkins
+      copy:
+        remote_src: yes
+        src: /tmp/jenkins/jenkins
+        dest: /var/lib
+
+    - name: Restore jenkins user ownership on /var/lib/jenkins
+      file:
+        path: /var/lib/jenkins
+        state: directory
+        recurse: yes
+        owner: jenkins
+
+    - name: Start Jenkins
+      service:
+        name: jenkins
+        state: started
+        enabled: yes
